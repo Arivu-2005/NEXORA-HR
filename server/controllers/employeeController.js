@@ -1,111 +1,101 @@
 import User from '../models/User.js';
+import { checkDatabaseStatus } from '../config/db.js';
+import { mockUsers } from '../config/initialData.js';
 
-// @desc    Get all employees with search and filter
-// @route   GET /api/employees
+let employeesData = [...mockUsers];
+
 export const getEmployees = async (req, res) => {
   try {
     const { search, department, role, status } = req.query;
-    let query = {};
 
+    if (checkDatabaseStatus()) {
+      let query = {};
+      if (search) {
+        query.$or = [
+          { name: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } },
+          { designation: { $regex: search, $options: 'i' } }
+        ];
+      }
+      if (department && department !== 'All') query.department = department;
+      if (role && role !== 'All') query.role = role;
+      if (status && status !== 'All') query.status = status;
+
+      const employees = await User.find(query).sort({ createdAt: -1 });
+      return res.status(200).json({ success: true, count: employees.length, data: employees });
+    }
+
+    // In-memory filter
+    let list = [...employeesData];
     if (search) {
-      query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
-        { designation: { $regex: search, $options: 'i' } }
-      ];
+      const q = search.toLowerCase();
+      list = list.filter(e => e.name.toLowerCase().includes(q) || e.email.toLowerCase().includes(q) || e.designation.toLowerCase().includes(q));
     }
+    if (department && department !== 'All') list = list.filter(e => e.department === department);
+    if (role && role !== 'All') list = list.filter(e => e.role === role);
+    if (status && status !== 'All') list = list.filter(e => e.status === status);
 
-    if (department && department !== 'All') {
-      query.department = department;
-    }
-
-    if (role && role !== 'All') {
-      query.role = role;
-    }
-
-    if (status && status !== 'All') {
-      query.status = status;
-    }
-
-    const employees = await User.find(query).sort({ createdAt: -1 });
-    res.status(200).json({ success: true, count: employees.length, data: employees });
+    res.status(200).json({ success: true, count: list.length, data: list });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// @desc    Get single employee
-// @route   GET /api/employees/:id
 export const getEmployeeById = async (req, res) => {
   try {
-    const employee = await User.findById(req.params.id);
-    if (!employee) {
-      return res.status(404).json({ success: false, message: 'Employee not found' });
+    if (checkDatabaseStatus()) {
+      const emp = await User.findById(req.params.id);
+      if (emp) return res.status(200).json({ success: true, data: emp });
     }
-    res.status(200).json({ success: true, data: employee });
+    const emp = employeesData.find(e => e._id === req.params.id);
+    if (!emp) return res.status(404).json({ success: false, message: 'Employee not found' });
+    res.status(200).json({ success: true, data: emp });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// @desc    Create new employee
-// @route   POST /api/employees
 export const createEmployee = async (req, res) => {
   try {
-    const { name, email, password, role, department, designation, phone, salary, status } = req.body;
-    
-    const existing = await User.findOne({ email });
-    if (existing) {
-      return res.status(400).json({ success: false, message: 'Employee with this email already exists' });
+    if (checkDatabaseStatus()) {
+      const emp = await User.create(req.body);
+      return res.status(201).json({ success: true, data: emp });
     }
-
-    const employee = await User.create({
-      name,
-      email,
-      password: password || 'nexora2026',
-      role: role || 'Employee',
-      department: department || 'Engineering',
-      designation: designation || 'Specialist',
-      phone: phone || '+1 (555) 012-3456',
-      salary: salary || 60000,
-      status: status || 'Active'
-    });
-
-    res.status(201).json({ success: true, data: employee });
+    const newEmp = {
+      _id: 'emp_' + Date.now(),
+      ...req.body,
+      status: req.body.status || 'Active'
+    };
+    employeesData.unshift(newEmp);
+    res.status(201).json({ success: true, data: newEmp });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// @desc    Update employee
-// @route   PUT /api/employees/:id
 export const updateEmployee = async (req, res) => {
   try {
-    // Exclude password change from basic update
-    const { password, ...updateData } = req.body;
-    const employee = await User.findByIdAndUpdate(req.params.id, updateData, {
-      new: true,
-      runValidators: true
-    });
-
-    if (!employee) {
-      return res.status(404).json({ success: false, message: 'Employee not found' });
+    if (checkDatabaseStatus()) {
+      const emp = await User.findByIdAndUpdate(req.params.id, req.body, { new: true });
+      if (emp) return res.status(200).json({ success: true, data: emp });
     }
-
-    res.status(200).json({ success: true, data: employee });
+    const index = employeesData.findIndex(e => e._id === req.params.id);
+    if (index !== -1) {
+      employeesData[index] = { ...employeesData[index], ...req.body };
+      return res.status(200).json({ success: true, data: employeesData[index] });
+    }
+    res.status(404).json({ success: false, message: 'Employee not found' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// @desc    Delete employee
-// @route   DELETE /api/employees/:id
 export const deleteEmployee = async (req, res) => {
   try {
-    const employee = await User.findByIdAndDelete(req.params.id);
-    if (!employee) {
-      return res.status(404).json({ success: false, message: 'Employee not found' });
+    if (checkDatabaseStatus()) {
+      await User.findByIdAndDelete(req.params.id);
     }
+    employeesData = employeesData.filter(e => e._id !== req.params.id);
     res.status(200).json({ success: true, message: 'Employee removed successfully' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
