@@ -1,6 +1,8 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import connectDB from './config/db.js';
 
 // Route files
@@ -14,6 +16,9 @@ import dashboardRoutes from './routes/dashboardRoutes.js';
 
 dotenv.config();
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 // Connect to Database
 connectDB();
 
@@ -22,12 +27,15 @@ const app = express();
 // Body Parser Middleware
 app.use(express.json());
 
-// Enable CORS for frontend Vite client
+// Enable CORS
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
+// Serve Pure Vanilla HTML/CSS/JS frontend from public directory
+app.use(express.static(path.join(__dirname, '../public')));
 
 // Welcome / Health check route
 app.get('/api/health', (req, res) => {
@@ -39,7 +47,7 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Mount Routers
+// Mount REST Routers
 app.use('/api/auth', authRoutes);
 app.use('/api/employees', employeeRoutes);
 app.use('/api/departments', departmentRoutes);
@@ -47,6 +55,11 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/leaves', leaveRoutes);
 app.use('/api/performance', performanceRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+
+// Fallback all other GET requests to public index.html
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/index.html'));
+});
 
 // Global Error Handler
 app.use((err, req, res, next) => {
@@ -57,7 +70,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 
 app.listen(PORT, () => {
   console.log(`[NEXORA HR] Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
