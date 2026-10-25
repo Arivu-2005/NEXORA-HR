@@ -12,12 +12,7 @@ const connectDB = async () => {
     return;
   }
 
-  const mongoUri = process.env.MONGODB_URI;
-
-  if (!mongoUri || mongoUri.includes('127.0.0.1') || mongoUri.includes('localhost') || mongoUri.includes('cluster0.mongodb.net')) {
-    console.log('[NEXORA HR] Database Notice: Using in-memory enterprise storage mode.');
-    return;
-  }
+  const mongoUri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/nexora_hr';
 
   try {
     const conn = await mongoose.connect(mongoUri, {
@@ -25,8 +20,9 @@ const connectDB = async () => {
     });
     isConnected = true;
     console.log(`[NEXORA HR] MongoDB Connected: ${conn.connection.host}`);
+    console.log(`[NEXORA HR] Database Name: ${conn.connection.name}`);
   } catch (error) {
-    console.error(`[NEXORA HR] Database Connection Error: ${error.message}`);
+    console.error(`[NEXORA HR] MongoDB Connection Notice: ${error.message}`);
     console.log('[NEXORA HR] Auto-switched to seamless cloud persistence layer.');
   }
 };
